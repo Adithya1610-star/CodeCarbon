@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16@sha256:33f923b05f64ca54ac4401c01126a6b92afe839a0aa0a52bc5aeb5cc958e5f20
+    environment:
+      POSTGRES_DB: codecarbon_db
+      POSTGRES_USER: codecarbon-user
+      POSTGRES_PASSWORD: supersecret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_codecarbon_data:/var/lib/postgresql/data
+
+  carbonserver:
+    build:
+      context: .
+      dockerfile: ./carbonserver/docker/Dockerfile
+    depends_on:
+      - postgres
+    volumes:
+      - ./carbonserver:/carbonserver
+    environment:
+      AUTH_PROVIDER: ${AUTH_PROVIDER:-none}
+      ENVIRONMENT: ${ENVIRONMENT:-local}
+      DATABASE_URL: postgresql://codecarbon-user:supersecret@postgres:5432/codecarbon_db
+      FRONTEND_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8008:8000"
+
+  ui:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+      target: build
+    restart: always
+    depends_on:
+      - carbonserver
+    environment:
+      VITE_API_URL: http://localhost:8008
+      VITE_BASE_URL: http://localhost:3000
+      VITE_USE_MOCK_DATA: "false"
+      VITE_PROJECT_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    volumes:
+      - ./webapp:/app
+    command: sh -c "pnpm install --frozen-lockfile --force && pnpm dev --host 0.0.0.0 --port 5173"
+    ports:
+      - "3000:5173"
+
+volumes:
+  postgres_codecarbon_data:
+  webapp_node_modules:
